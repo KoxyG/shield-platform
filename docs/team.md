@@ -4,8 +4,10 @@ Each person owns one security property end to end: the Circom constraints, the
 Groth16 proving, the matching Soroban logic, and the adversarial tests for it.
 All three take part in threat modelling and final verification.
 
-> Scope of this split: ZK circuits and Soroban contracts. Backend, SDP
-> integration and UI ownership are still to be split (see "Not yet split").
+> Phase 1 (below) covers ZK circuits and Soroban contracts. Phase 2 (SDP
+> integration, backend and minimal frontend) is further down.
+
+## Phase 1 — ZK circuits & contracts
 
 | Member | Property owned | Guarantees |
 |---|---|---|
@@ -83,14 +85,86 @@ template consumes from the membership template, and who owns the top-level
 | 1 | Agree on the withdraw-circuit interface: which commitment/secret signals the nullifier template takes from the membership template, and who owns the top-level `withdraw.circom` | @0xVidavida, @koxyG | Writing the withdraw circuit |
 | 2 | Decide architecture **D1** (withdrawal amount leakage: fixed denominations vs. public payout amount vs. confidential balance layer) | Whole team | Phase 1 circuit and fund-release work goes far |
 | 3 | Sign off on the shared protocol spec in [architecture.md](architecture.md#shared-protocol-specification) | Whole team | Any implementation |
-| 4 | Split backend, SDP integration and UI ownership | Whole team | Phase 3 |
+| 4 | ~~Split backend, SDP integration and UI ownership~~ ✅ Done (Phase 2 below) | Whole team | — |
+| 5 | Write decision 0002 (Node/TS + MongoDB, Next.js, stellar-sdk) | Whole team | Phase 2 code |
+| 6 | Decide D6, the SDP integration boundary (spike first) | @IbrahimIjai | Batch creation work |
+| 7 | Scaffold `apps/web` (Next.js app, layout/navigation, shared UI components) and `apps/api` (Node/TS + MongoDB skeleton) before feature work | Whole team (pick one owner) | Phase 2 frontend/backend work |
 
-## Not yet split
+## Phase 2 — SDP integration, backend & minimal frontend
 
-The split above covers the ZK and on-chain work only. The following will be
-divided across the team separately:
+Stack: Node + TypeScript API with MongoDB (`apps/api`), Next.js (`apps/web`),
+`@stellar/stellar-sdk` with generated contract bindings (see decision 0002).
 
-- SDP integration: adapter, backend APIs, database changes, delivery of claim
-  data to recipients, SEP-24 / wallet claim flow.
-- Demo UI (deposit, proof generation, withdrawal).
-- Testnet deployment and the end-to-end demo.
+| Member | Area | Deliverable |
+|---|---|---|
+| Person 1 — [@IbrahimIjai](https://github.com/IbrahimIjai) | Disbursement creation & management | An organisation can create, fund and monitor a confidential disbursement from a simple interface |
+| Person 2 — [@0xVidavida](https://github.com/0xVidavida) | Recipient claims & proof generation | A recipient can access their allocation, generate a valid ZK proof and submit a claim |
+| Person 3 — [@koxyG](https://github.com/koxyG) | Blockchain transactions & monitoring | Funding and claiming transactions execute correctly and users can see their status |
+
+### Person 1 — Disbursement Creation & Management (@IbrahimIjai)
+
+**Backend**
+- Set up and integrate an SDP instance (boundary: architecture D6).
+- Confidential disbursement batch creation.
+- Process recipient allocations and generate commitments.
+- Construct Merkle trees and store batch metadata.
+- Integrate batch funding with the Soroban contract (via Person 3's contract client).
+- Track disbursement status.
+
+**Minimal frontend**
+- Confidential disbursement creation form.
+- Recipient and amount entry (or CSV upload).
+- Batch summary: total amount and number of recipients.
+- Fund/submit disbursement button.
+- Basic batch status display.
+
+### Person 2 — Recipient Claims & Proof Generation (@0xVidavida)
+
+**Backend**
+- Integrate SDP's existing recipient onboarding flow.
+- Secure delivery of claim credentials.
+- Retrieve allocation data and construct Merkle witnesses.
+- Integrate Groth16 proof generation.
+- Check claim eligibility and status.
+- Claim preparation API.
+
+**Minimal frontend**
+- Recipient claim page.
+- Connect wallet or use an existing supported wallet flow (via Person 3's wallet component).
+- View private allocation amount.
+- Generate proof button, with progress/error feedback.
+- Claim funds button.
+- Claim status display.
+
+### Person 3 — Blockchain Transactions & Monitoring (@koxyG)
+
+**Backend**
+- Soroban contract client and transaction builders.
+- Wallet signing and transaction submission.
+- Contract calls for batch registration and claims.
+- Monitor transaction confirmation.
+- Index contract events and sync database records.
+- Handle retries, duplicate submissions and failures.
+- Transaction status APIs.
+
+**Minimal frontend**
+- Transaction confirmation/review component.
+- Wallet signing interface integration.
+- Transaction progress and status indicators.
+- Transaction details with Stellar Explorer links.
+- Simple activity/history page showing batches and claims.
+
+### Boundaries between Phase 2 roles
+
+| Overlap | Boundary |
+|---|---|
+| Batch funding (P1) vs contract calls (P3) | P3 owns the contract client, transaction building, submission and monitoring; P1 calls `registerBatch()` / `fundBatch()` |
+| Proof generation (P2) vs claim submission (P3) | P2 produces `{proof, publicInputs}`; P3 submits via `withdraw` and tracks it |
+| Wallet connect (P2) vs wallet signing (P3) | P3 builds one shared wallet component; P1 and P2 reuse it |
+| `packages/sdk` | Shared; P3 owns the `chain/` module (client, transactions, events) |
+
+### Privacy note for Phase 2
+
+Indexers, status APIs and history pages must not add linkage beyond what's already
+on-chain. For example, don't store or display which leaf or allocation a claim
+corresponds to.

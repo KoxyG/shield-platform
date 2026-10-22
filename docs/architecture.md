@@ -10,7 +10,7 @@
 | Vault: batch registration & conservation check | `shield-contracts/contracts/shield-vault` | Person 1 (@IbrahimIjai) |
 | Vault: claim validation | `shield-contracts/contracts/shield-vault` | Person 2 (@0xVidavida) |
 | Vault: nullifier tracking & fund release | `shield-contracts/contracts/shield-vault` | Person 3 (@koxyG) |
-| Groth16 verifier contract | `shield-contracts/contracts/shield-verifier` | Shared |
+| Groth16 verifier contract | `shield-contracts/contracts/shield-verifier` | Person 2 (@0xVidavida) |
 | Proof / commitment SDK | `shield-platform/packages/sdk` | Shared |
 | Confidential disbursement service + SDP adapter | `shield-platform/apps/api` | To be split |
 | Disburser and recipient demo UI | `shield-platform/apps/web` | To be split |
@@ -45,12 +45,12 @@ All three components must match these exactly. Changes go through a decision rec
 |---|---|
 | Field | BN254 scalar field |
 | Hash | Poseidon, **circomlib parameters**. The Soroban Poseidon host function must produce identical outputs; verify with shared test vectors before Phase 2. |
-| Commitment | `Poseidon(amount, secret, batch_id)` (proposed) |
-| Nullifier | `Poseidon(secret, leaf_index)` (proposed). Scope: unique per leaf, global nullifier set per batch. |
+| Commitment | `Poseidon(amount, secret, batch_id)`, implemented in `circuits/commitment.circom` (`AllocationCommitment`). `claim.circom` still has to adopt it. |
+| Nullifier | `Poseidon(TAG, secret, leafIndex)` with `TAG` = ASCII `"shieldzk.nullifier"` as a field element (domain separation from commitments). `leafIndex` is rebuilt in-circuit from `pathIndices`. Implemented in `circuits/nullifier.circom`; JS mirror in `circuits/lib/nullifier.js`. Scope: per batch; the vault stores `(batch_id, nullifier)` and rejects non-canonical values (≥ field modulus). |
 | Merkle tree | Binary Poseidon tree, one tree per batch, depth 10 (= 1024 recipients) (proposed). Empty leaves = 0, leaves in insertion order, root is one field element. |
 | Amount | Integer in token base units, range-checked to 64 bits in-circuit |
-| Recipient binding | Recipient address encoded as a field element and included as a public input, so a proof can't be front-run or redirected |
-| Withdraw public inputs | `root, nullifier, batch_id, recipient` plus the payout amount if public (see open decision D1) |
+| Recipient binding | Recipient is a public input, so a proof can't be front-run or redirected. Encoding (D4): `sha256(ScVal XDR of the address)` with the top 3 bits cleared (253 bits). Implemented in `circuits/lib/recipient.js` and the vault's `recipient_to_field`; both checked against `circuits/test-vectors/recipient.json`. |
+| Withdraw public inputs | `[root, nullifierHash, recipient, amount]`, in this order. `batch_id` is not a public input: the vault looks up the batch's stored root by `batch_id`. `amount` is public pending D1. |
 | Conservation public inputs | TBD (depends on D5) |
 | Test vectors | `shield-contracts/circuits/test-vectors/*.json`, produced by Person 1 and used by everyone |
 
@@ -92,10 +92,29 @@ All three components must match these exactly. Changes go through a decision rec
   delivered encrypted, vs. derived on the recipient's device).
 - **D3. Trusted setup source:** which existing Powers of Tau file, and whether we run
   a phase-2 ceremony for each circuit.
-- **D4. Recipient address → field encoding.**
+- **D4. Recipient address → field encoding.** ✅ Decided: `sha256(ScVal XDR)` with the top 3 bits cleared. See the "Recipient binding" row above.
 - **D5. Balance conservation design (open discussion).** Publishing commitments
   doesn't by itself prove their sum equals the deposit. The proof must tie to the
   actual committed leaves and include amount range constraints. Approaches to
   discuss include a single batch proof over the root and sum at funding time, or
   per-claim accounting enforced by the contract. Person 1 to propose; whole team
   to review.
+- **D6. SDP integration boundary (open — @IbrahimIjai to decide).** How confidential
+  batches relate to SDP disbursements. SDP must never *execute* payments for a
+  confidential batch: starting an SDP disbursement makes SDP pay every recipient in
+  cleartext.
+
+  > **Suggestion (from @koxyG):** don't mirror confidential batches as SDP
+  > disbursements. Use only SDP's Receivers and Registration APIs (recipient records,
+  > SMS invitations, wallet registration), and let ShieldZK own the batch record
+  > (commitments, root, funding, claims). Reasons:
+  > - A mirrored draft disbursement is one "Start" away from paying everyone in cleartext.
+  > - SDP's disbursement CSV needs per-recipient amounts, which would put every
+  >   allocation in plaintext in SDP's database.
+  > - The draft would never complete, which confuses operators' dashboards and reports.
+  >
+  > **Check first (1–2 day spike on a local SDP):** in SDP's normal flow, invitations are
+  > triggered by a disbursement. Confirm whether receivers created via the API get
+  > invited and can register a wallet without a started disbursement. If not, ShieldZK
+  > could send its own claim invitations and reuse SDP only for receiver records and
+  > wallet registration.
