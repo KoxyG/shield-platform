@@ -5,15 +5,20 @@
   "private": true,
   "sideEffects": false,
   "scripts": {
+    "bindings": "bash scripts/gen-vault-bindings.sh",
     "format": "prettier --write \"**/*.ts\"",
     "test": "bun test",
     "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "17.2.1"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
     "typescript": "^6.0.2"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./chain": "./src/chain/index.ts"
   }
 }
