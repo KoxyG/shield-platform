@@ -1,2 +1,6 @@
+export * from "./batch"
+export * from "./commitment"
 export * from "./field"
+export * from "./merkle"
+export * from "./proof"
 export * from "./protocol"
