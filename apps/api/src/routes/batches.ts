@@ -1,3 +1,4 @@
+import { StrKey } from "@stellar/stellar-sdk"
 import {
   MAX_ALLOCATIONS,
   MAX_AMOUNT,
@@ -5,6 +6,7 @@ import {
   buildBatch,
   generateSecret,
 } from "@workspace/sdk"
+import type { ShieldVaultClient, VaultBatch } from "@workspace/sdk/chain"
 import { Router } from "express"
 import { z } from "zod"
 
@@ -20,6 +22,9 @@ import type { ConservationProofs } from "../proving/proofs"
 
 /** What the API shows of a batch: never its allocations, which hold the secrets. */
 export type BatchSummary = Omit<BatchRecord, "depth">
+
+/** What the API reads from the vault, through Person 3's client. */
+export type VaultReader = Pick<ShieldVaultClient, "getBatch">
 
 const BatchId = z
   .string()
@@ -61,6 +66,21 @@ const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
 })
 
+const FundingBody = z.object({
+  funder: z
+    .string()
+    .refine(
+      (a) => StrKey.isValidEd25519PublicKey(a) || StrKey.isValidContract(a),
+      "must be a Stellar address (G... or C...)"
+    ),
+  token: z
+    .string()
+    .refine(StrKey.isValidContract, "must be a token contract address (C...)"),
+  txHash: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/, "must be a transaction hash (64 hex characters)"),
+})
+
 // Batch ids are random, so they don't reveal how many batches an organisation has
 // made. Picking one that's in use is astronomically unlikely, and costs a retry.
 const ID_ATTEMPTS = 3
@@ -69,11 +89,14 @@ export function batchesRouter({
   store,
   claimDataKey,
   proofs,
+  vault,
 }: {
   store: BatchStore
   claimDataKey: Uint8Array
   /** Undefined when proving isn't configured (CONSERVATION_CIRCUITS_DIR). */
   proofs?: ConservationProofs
+  /** Undefined when the vault isn't configured (STELLAR_RPC_URL and co.). */
+  vault?: VaultReader
 }): Router {
   const router = Router()
 
@@ -174,6 +197,79 @@ export function batchesRouter({
         }
         proofs.start(params.batchId)
         res.status(202).json(summary((await store.get(params.batchId))!))
+      }
+    )
+  )
+
+  // Step 3 of the end-to-end flow. The disburser's wallet sends fund_batch, built
+  // with Person 3's ShieldVaultClient, and reports it here. The batch counts as
+  // funded once the vault holds this batch's root and total in the reported token:
+  // a vault batch with another token means someone else registered the id first.
+  router.post(
+    "/batches/:batchId/funding",
+    validated(
+      { params: z.object({ batchId: BatchId }), body: FundingBody },
+      async ({ params, body }, req, res) => {
+        if (!vault) {
+          throw new HttpError(
+            503,
+            "chain_unavailable",
+            "The vault isn't configured on this server"
+          )
+        }
+        const batch = await store.get(params.batchId)
+        if (!batch) {
+          throw new HttpError(404, "batch_not_found", "No batch with this id")
+        }
+        if (batch.status !== "proved") {
+          throw new HttpError(
+            409,
+            "invalid_status",
+            `Only a proved batch can be funded; this one is ${batch.status}`
+          )
+        }
+
+        let onChain: VaultBatch | undefined
+        try {
+          onChain = await vault.getBatch(params.batchId)
+        } catch (err) {
+          req.log.warn({ err }, "could not read the vault")
+          throw new HttpError(502, "chain_error", "Couldn't read the vault")
+        }
+        if (!onChain) {
+          throw new HttpError(
+            409,
+            "not_funded",
+            "The vault has no batch with this id yet"
+          )
+        }
+        if (
+          onChain.root !== batch.root ||
+          onChain.total !== batch.total ||
+          onChain.token !== body.token
+        ) {
+          throw new HttpError(
+            409,
+            "funding_mismatch",
+            "The vault's batch with this id doesn't match this batch: another funder may have registered the id first"
+          )
+        }
+
+        const funded = await store.setStatus(
+          params.batchId,
+          "proved",
+          "funded",
+          {
+            funder: body.funder,
+            token: body.token,
+            fundingTx: body.txHash,
+            fundedAt: new Date(),
+          }
+        )
+        if (!funded) {
+          throw new HttpError(409, "invalid_status", "The batch changed status")
+        }
+        res.json(summary((await store.get(params.batchId))!))
       }
     )
   )

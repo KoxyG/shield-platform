@@ -15,6 +15,7 @@
       "name": "api",
       "version": "0.0.1",
       "dependencies": {
+        "@stellar/stellar-sdk": "17.2.1",
         "@workspace/sdk": "workspace:*",
         "cors": "^2.8.6",
         "express": "^5.3.0",

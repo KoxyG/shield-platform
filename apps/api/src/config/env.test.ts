@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import { Networks, StrKey } from "@stellar/stellar-sdk"
 
-import { loadConfig } from "./env"
+import { loadConfig, vaultConnection } from "./env"
 
 const MONGODB_URI = "mongodb://localhost:27017/shieldzk"
 const CLAIM_DATA_KEY = Buffer.alloc(32, 7).toString("base64")
@@ -69,5 +70,37 @@ describe("loadConfig", () => {
     expect(() => loadConfig({ ...required, CORS_ORIGINS: "nope" })).toThrow(
       /CORS_ORIGINS/
     )
+  })
+})
+
+describe("vault settings", () => {
+  const chain = {
+    STELLAR_RPC_URL: "http://localhost:8000/soroban/rpc",
+    STELLAR_NETWORK_PASSPHRASE: Networks.STANDALONE,
+    VAULT_CONTRACT_ID: StrKey.encodeContract(Buffer.alloc(32, 1)),
+  }
+
+  test("give the vault connection, allowing http for a local RPC", () => {
+    expect(vaultConnection(loadConfig({ ...required, ...chain }))).toEqual({
+      contractId: chain.VAULT_CONTRACT_ID,
+      networkPassphrase: Networks.STANDALONE,
+      rpcUrl: chain.STELLAR_RPC_URL,
+      allowHttp: true,
+    })
+  })
+
+  test("are optional, but all or none", () => {
+    expect(vaultConnection(loadConfig(required))).toBeUndefined()
+    const { VAULT_CONTRACT_ID: _, ...partial } = chain
+    expect(() => loadConfig({ ...required, ...partial })).toThrow(
+      /VAULT_CONTRACT_ID/
+    )
+  })
+
+  test("reject a vault id that isn't a contract address", () => {
+    const account = "GCFIRY65OQE7DFP5KLNS2PF2LVZMUZYJX4OZIEQ36N2IQANUB5XVYOJR"
+    expect(() =>
+      loadConfig({ ...required, ...chain, VAULT_CONTRACT_ID: account })
+    ).toThrow(/VAULT_CONTRACT_ID/)
   })
 })

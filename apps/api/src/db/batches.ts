@@ -11,9 +11,10 @@ import { jsonReplacer } from "../lib/json"
 
 /**
  * Where a batch is in the end-to-end flow: created, then its conservation proof is
- * generated (proving, then proved; or failed, and proved again). Funding adds states.
+ * generated (proving, then proved; or failed, and proved again), then funded once
+ * the vault holds it.
  */
-export type BatchStatus = "created" | "proving" | "proved" | "failed"
+export type BatchStatus = "created" | "proving" | "proved" | "failed" | "funded"
 
 /** A confidential batch. Only values that end up public; allocations are separate. */
 export type BatchRecord = {
@@ -32,7 +33,23 @@ export type BatchRecord = {
   proof?: string
   /** Why the last proof failed. Never holds claim data. */
   error?: string
+  /** Who paid for the batch, as reported with the funding transaction. */
+  funder?: string
+  /** Token contract the vault holds the batch in. */
+  token?: string
+  /** Hash of the fund_batch transaction, as reported. */
+  fundingTx?: string
+  /** When the vault was confirmed to hold the batch. */
+  fundedAt?: Date
 }
+
+/** Fields that change with a batch's status. */
+export type StatusFields = Partial<
+  Pick<
+    BatchRecord,
+    "proof" | "error" | "funder" | "token" | "fundingTx" | "fundedAt"
+  >
+>
 
 /** One recipient's allocation. The claim data is encrypted: it holds their secret. */
 export type AllocationRecord = {
@@ -63,15 +80,15 @@ export interface BatchStore {
   /** A batch's allocations, in leaf order. */
   allocations(batchId: bigint): Promise<AllocationRecord[]>
   /**
-   * Moves a batch from status `from` to `to`, setting `proof` or `error` if given;
-   * `error` is cleared otherwise. Returns false, changing nothing, if the batch isn't
-   * in status `from`, so two requests can't make the same move.
+   * Moves a batch from status `from` to `to`, setting the given fields; `error` is
+   * cleared unless given. Returns false, changing nothing, if the batch isn't in
+   * status `from`, so two requests can't make the same move.
    */
   setStatus(
     batchId: bigint,
     from: BatchStatus,
     to: BatchStatus,
-    fields?: { proof?: string; error?: string }
+    fields?: StatusFields
   ): Promise<boolean>
   /** Every batch in the given status. */
   withStatus(status: BatchStatus): Promise<BatchRecord[]>
@@ -211,18 +228,14 @@ export class MongoBatchStore implements BatchStore {
     batchId: bigint,
     from: BatchStatus,
     to: BatchStatus,
-    { proof, error }: { proof?: string; error?: string } = {}
+    fields: StatusFields = {}
   ): Promise<boolean> {
     // The status in the filter makes check-and-set one atomic update
     const result = await this.batches.updateOne(
       { _id: batchId.toString(), status: from },
       {
-        $set: {
-          status: to,
-          ...(proof === undefined ? {} : { proof }),
-          ...(error === undefined ? {} : { error }),
-        },
-        ...(error === undefined ? { $unset: { error: "" } } : {}),
+        $set: { status: to, ...definedFields(fields) },
+        ...(fields.error === undefined ? { $unset: { error: "" } } : {}),
       }
     )
     return result.matchedCount === 1
@@ -232,6 +245,13 @@ export class MongoBatchStore implements BatchStore {
     const docs = await this.batches.find({ status }).toArray()
     return docs.map(fromBatchDoc)
   }
+}
+
+/** `fields` without its undefined entries, which MongoDB would store as null. */
+export function definedFields(fields: StatusFields): StatusFields {
+  return Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined)
+  )
 }
 
 function fromBatchDoc({ _id, root, total, ...rest }: BatchDoc): BatchRecord {

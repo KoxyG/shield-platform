@@ -1,9 +1,11 @@
 import {
   BatchIdTakenError,
+  definedFields,
   type AllocationRecord,
   type BatchRecord,
   type BatchStatus,
   type BatchStore,
+  type StatusFields,
 } from "./batches"
 
 /** BatchStore in memory, for tests. */
@@ -40,17 +42,12 @@ export class MemoryBatchStore implements BatchStore {
     batchId: bigint,
     from: BatchStatus,
     to: BatchStatus,
-    { proof, error }: { proof?: string; error?: string } = {}
+    fields: StatusFields = {}
   ): Promise<boolean> {
     const batch = this.batches.get(batchId)
     if (batch?.status !== from) return false
     const { error: _, ...rest } = batch
-    this.batches.set(batchId, {
-      ...rest,
-      status: to,
-      ...(proof === undefined ? {} : { proof }),
-      ...(error === undefined ? {} : { error }),
-    })
+    this.batches.set(batchId, { ...rest, status: to, ...definedFields(fields) })
     return true
   }
 

@@ -132,5 +132,20 @@ describe.skipIf(!uri)("MongoBatchStore", () => {
     })
     const proved = (await store.withStatus("proved")).map((b) => b.batchId)
     expect(proved).toContain(id)
+
+    // Funding keeps the proof and adds who paid, in what, and when
+    const fundedAt = new Date(Date.UTC(2026, 9, 29))
+    const funding = {
+      funder: "GCFIRY65OQE7DFP5KLNS2PF2LVZMUZYJX4OZIEQ36N2IQANUB5XVYOJR",
+      token: "CABAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAFNSZ",
+      fundingTx: "ab".repeat(32),
+      fundedAt,
+    }
+    expect(await store.setStatus(id, "proved", "funded", funding)).toBe(true)
+    expect(await store.get(id)).toMatchObject({
+      status: "funded",
+      proof: "0xab",
+      ...funding,
+    })
   })
 })

@@ -1,8 +1,10 @@
 import { existsSync } from "node:fs"
 import { createServer } from "node:http"
 
+import { ShieldVaultClient } from "@workspace/sdk/chain"
+
 import { createApp } from "./app"
-import { loadConfig } from "./config/env"
+import { loadConfig, vaultConnection } from "./config/env"
 import { MongoBatchStore } from "./db/batches"
 import { connectMongo } from "./db/mongo"
 import { createLogger } from "./lib/logger"
@@ -61,6 +63,12 @@ if (circuitsDir) {
   logger.warn("proving is off: CONSERVATION_CIRCUITS_DIR isn't set")
 }
 
+const connection = vaultConnection(config)
+const vault = connection ? new ShieldVaultClient(connection) : undefined
+if (!vault) {
+  logger.warn("funding can't be confirmed: the vault isn't configured")
+}
+
 const app = createApp({
   config,
   logger,
@@ -71,6 +79,7 @@ const app = createApp({
   },
   batches,
   proofs,
+  vault,
 })
 
 const server = createServer(app)
