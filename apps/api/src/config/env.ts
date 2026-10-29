@@ -34,6 +34,10 @@ const EnvSchema = z.object({
       "must be 32 bytes in base64 (openssl rand -base64 32)"
     )
     .transform((value) => Buffer.from(value, "base64")),
+  // shield-contracts' circuits directory. Batches are proved with its
+  // lib/conservation.js and the conservation_main keys that
+  // scripts/groth16-setup.sh wrote to build/. Unset, proving is off.
+  CONSERVATION_CIRCUITS_DIR: z.string().min(1).optional(),
 })
 
 export type Config = z.output<typeof EnvSchema>

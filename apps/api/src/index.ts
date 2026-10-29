@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs"
 import { createServer } from "node:http"
 
 import { createApp } from "./app"
@@ -5,6 +6,12 @@ import { loadConfig } from "./config/env"
 import { MongoBatchStore } from "./db/batches"
 import { connectMongo } from "./db/mongo"
 import { createLogger } from "./lib/logger"
+import {
+  CONSERVATION_CIRCUIT,
+  conservationArtifacts,
+  nodeConservationProver,
+} from "./proving/conservation"
+import { ConservationProofs } from "./proving/proofs"
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
@@ -31,6 +38,29 @@ await batches.ensureIndexes().catch((err: unknown) => {
   process.exit(1)
 })
 
+let proofs: ConservationProofs | undefined
+const circuitsDir = config.CONSERVATION_CIRCUITS_DIR
+if (circuitsDir) {
+  const artifacts = conservationArtifacts(circuitsDir, CONSERVATION_CIRCUIT)
+  const missing = Object.values(artifacts).filter((file) => !existsSync(file))
+  if (missing.length > 0) {
+    logger.fatal({ missing }, "conservation prover files not found")
+    process.exit(1)
+  }
+  proofs = new ConservationProofs({
+    store: batches,
+    prover: nodeConservationProver(circuitsDir),
+    claimDataKey: config.CLAIM_DATA_KEY,
+    logger,
+  })
+  // Proofs a restart interrupted start over
+  for (const batch of await batches.withStatus("proving")) {
+    proofs.start(batch.batchId)
+  }
+} else {
+  logger.warn("proving is off: CONSERVATION_CIRCUITS_DIR isn't set")
+}
+
 const app = createApp({
   config,
   logger,
@@ -40,6 +70,7 @@ const app = createApp({
     },
   },
   batches,
+  proofs,
 })
 
 const server = createServer(app)

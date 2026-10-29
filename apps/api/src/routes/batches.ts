@@ -16,6 +16,7 @@ import {
 } from "../db/batches"
 import { HttpError } from "../lib/http-error"
 import { validated } from "../lib/validated"
+import type { ConservationProofs } from "../proving/proofs"
 
 /** What the API shows of a batch: never its allocations, which hold the secrets. */
 export type BatchSummary = Omit<BatchRecord, "depth">
@@ -67,9 +68,12 @@ const ID_ATTEMPTS = 3
 export function batchesRouter({
   store,
   claimDataKey,
+  proofs,
 }: {
   store: BatchStore
   claimDataKey: Uint8Array
+  /** Undefined when proving isn't configured (CONSERVATION_CIRCUITS_DIR). */
+  proofs?: ConservationProofs
 }): Router {
   const router = Router()
 
@@ -135,6 +139,41 @@ export function batchesRouter({
           throw new HttpError(404, "batch_not_found", "No batch with this id")
         }
         res.json(summary(batch))
+      }
+    )
+  )
+
+  // Step 2 of the end-to-end flow: prove that the batch's allocations add up to its
+  // total. Proving runs in the background; poll the batch for "proved" or "failed".
+  router.post(
+    "/batches/:batchId/prove",
+    validated(
+      { params: z.object({ batchId: BatchId }) },
+      async ({ params }, _req, res) => {
+        if (!proofs) {
+          throw new HttpError(
+            503,
+            "proving_unavailable",
+            "Proving isn't configured on this server"
+          )
+        }
+        const batch = await store.get(params.batchId)
+        if (!batch) {
+          throw new HttpError(404, "batch_not_found", "No batch with this id")
+        }
+        const from = batch.status
+        const started =
+          (from === "created" || from === "failed") &&
+          (await store.setStatus(params.batchId, from, "proving"))
+        if (!started) {
+          throw new HttpError(
+            409,
+            "invalid_status",
+            `Only a created or failed batch can be proved; this one is ${from}`
+          )
+        }
+        proofs.start(params.batchId)
+        res.status(202).json(summary((await store.get(params.batchId))!))
       }
     )
   )

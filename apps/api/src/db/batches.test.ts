@@ -107,4 +107,30 @@ describe.skipIf(!uri)("MongoBatchStore", () => {
     expect(listed.indexOf(101n)).toBeLessThan(listed.indexOf(100n))
     expect(await store.list(1)).toHaveLength(1)
   })
+
+  test("moves a batch to a new status only from the expected one", async () => {
+    const id = 200n
+    await store.create(batch(id), allocations(id))
+
+    expect(await store.setStatus(id, "proved", "failed")).toBe(false)
+    expect(await store.setStatus(id, "created", "proving")).toBe(true)
+    expect(
+      await store.setStatus(id, "proving", "failed", { error: "boom" })
+    ).toBe(true)
+    expect((await store.get(id))?.error).toBe("boom")
+
+    // Leaving "failed" clears the error
+    expect(await store.setStatus(id, "failed", "proving")).toBe(true)
+    expect(await store.get(id)).not.toHaveProperty("error")
+
+    expect(
+      await store.setStatus(id, "proving", "proved", { proof: "0xab" })
+    ).toBe(true)
+    expect(await store.get(id)).toMatchObject({
+      status: "proved",
+      proof: "0xab",
+    })
+    const proved = (await store.withStatus("proved")).map((b) => b.batchId)
+    expect(proved).toContain(id)
+  })
 })

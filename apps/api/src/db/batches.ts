@@ -9,8 +9,11 @@ import {
 import { decrypt, encrypt, type Encrypted } from "../lib/encryption"
 import { jsonReplacer } from "../lib/json"
 
-/** Where a batch is in its life. Proving, funding and claims add states. */
-export type BatchStatus = "created"
+/**
+ * Where a batch is in the end-to-end flow: created, then its conservation proof is
+ * generated (proving, then proved; or failed, and proved again). Funding adds states.
+ */
+export type BatchStatus = "created" | "proving" | "proved" | "failed"
 
 /** A confidential batch. Only values that end up public; allocations are separate. */
 export type BatchRecord = {
@@ -25,6 +28,10 @@ export type BatchRecord = {
   depth: number
   recipientCount: number
   createdAt: Date
+  /** The conservation proof as hex, in the 256-byte encoding fund_batch takes. */
+  proof?: string
+  /** Why the last proof failed. Never holds claim data. */
+  error?: string
 }
 
 /** One recipient's allocation. The claim data is encrypted: it holds their secret. */
@@ -55,6 +62,19 @@ export interface BatchStore {
   list(limit: number): Promise<BatchRecord[]>
   /** A batch's allocations, in leaf order. */
   allocations(batchId: bigint): Promise<AllocationRecord[]>
+  /**
+   * Moves a batch from status `from` to `to`, setting `proof` or `error` if given;
+   * `error` is cleared otherwise. Returns false, changing nothing, if the batch isn't
+   * in status `from`, so two requests can't make the same move.
+   */
+  setStatus(
+    batchId: bigint,
+    from: BatchStatus,
+    to: BatchStatus,
+    fields?: { proof?: string; error?: string }
+  ): Promise<boolean>
+  /** Every batch in the given status. */
+  withStatus(status: BatchStatus): Promise<BatchRecord[]>
 }
 
 /**
@@ -117,6 +137,7 @@ export class MongoBatchStore implements BatchStore {
   /** Creates the indexes the store relies on. Safe to run on every boot. */
   async ensureIndexes(): Promise<void> {
     await this.batches.createIndex({ createdAt: -1 })
+    await this.batches.createIndex({ status: 1 })
     // Also makes a batch id usable by one batch only: see create()
     await this.allocationDocs.createIndex(
       { batchId: 1, leafIndex: 1 },
@@ -184,6 +205,32 @@ export class MongoBatchStore implements BatchStore {
       .sort({ leafIndex: 1 })
       .toArray()
     return docs.map((doc) => ({ ...doc, batchId: BigInt(doc.batchId) }))
+  }
+
+  async setStatus(
+    batchId: bigint,
+    from: BatchStatus,
+    to: BatchStatus,
+    { proof, error }: { proof?: string; error?: string } = {}
+  ): Promise<boolean> {
+    // The status in the filter makes check-and-set one atomic update
+    const result = await this.batches.updateOne(
+      { _id: batchId.toString(), status: from },
+      {
+        $set: {
+          status: to,
+          ...(proof === undefined ? {} : { proof }),
+          ...(error === undefined ? {} : { error }),
+        },
+        ...(error === undefined ? { $unset: { error: "" } } : {}),
+      }
+    )
+    return result.matchedCount === 1
+  }
+
+  async withStatus(status: BatchStatus): Promise<BatchRecord[]> {
+    const docs = await this.batches.find({ status }).toArray()
+    return docs.map(fromBatchDoc)
   }
 }
 
