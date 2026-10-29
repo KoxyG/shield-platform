@@ -14,7 +14,14 @@ import { jsonReplacer } from "../lib/json"
  * generated (proving, then proved; or failed, and proved again), then funded once
  * the vault holds it.
  */
-export type BatchStatus = "created" | "proving" | "proved" | "failed" | "funded"
+export const BATCH_STATUSES = [
+  "created",
+  "proving",
+  "proved",
+  "failed",
+  "funded",
+] as const
+export type BatchStatus = (typeof BATCH_STATUSES)[number]
 
 /** A confidential batch. Only values that end up public; allocations are separate. */
 export type BatchRecord = {
@@ -75,8 +82,8 @@ export interface BatchStore {
   /** Saves a new batch with its allocations. Throws BatchIdTakenError if the id is in use. */
   create(batch: BatchRecord, allocations: AllocationRecord[]): Promise<void>
   get(batchId: bigint): Promise<BatchRecord | undefined>
-  /** The most recently created batches, newest first. */
-  list(limit: number): Promise<BatchRecord[]>
+  /** The most recently created batches, newest first; only those in `status` if given. */
+  list(limit: number, status?: BatchStatus): Promise<BatchRecord[]>
   /** A batch's allocations, in leaf order. */
   allocations(batchId: bigint): Promise<AllocationRecord[]>
   /**
@@ -207,9 +214,9 @@ export class MongoBatchStore implements BatchStore {
     return doc ? fromBatchDoc(doc) : undefined
   }
 
-  async list(limit: number): Promise<BatchRecord[]> {
+  async list(limit: number, status?: BatchStatus): Promise<BatchRecord[]> {
     const docs = await this.batches
-      .find()
+      .find(status ? { status } : {})
       .sort({ createdAt: -1 })
       .limit(limit)
       .toArray()

@@ -28,8 +28,9 @@ export class MemoryBatchStore implements BatchStore {
     return this.batches.get(batchId)
   }
 
-  async list(limit: number): Promise<BatchRecord[]> {
+  async list(limit: number, status?: BatchStatus): Promise<BatchRecord[]> {
     return [...this.batches.values()]
+      .filter((b) => status === undefined || b.status === status)
       .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())
       .slice(0, limit)
   }

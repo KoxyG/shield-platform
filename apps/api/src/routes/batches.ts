@@ -8,9 +8,11 @@ import {
 } from "@workspace/sdk"
 import type { ShieldVaultClient, VaultBatch } from "@workspace/sdk/chain"
 import { Router } from "express"
+import type { Logger } from "pino"
 import { z } from "zod"
 
 import {
+  BATCH_STATUSES,
   BatchIdTakenError,
   sealClaim,
   type BatchRecord,
@@ -25,6 +27,15 @@ export type BatchSummary = Omit<BatchRecord, "depth">
 
 /** What the API reads from the vault, through Person 3's client. */
 export type VaultReader = Pick<ShieldVaultClient, "getBatch">
+
+/** How much of a funded batch its recipients have claimed, per the vault. */
+export type ClaimProgress = { withdrawn: bigint; remaining: bigint }
+
+/**
+ * One batch, as GET /v1/batches/:batchId shows it. A funded batch also shows its
+ * claim progress: null when the vault can't be read right now.
+ */
+export type BatchDetail = BatchSummary & { claims?: ClaimProgress | null }
 
 const BatchId = z
   .string()
@@ -64,6 +75,7 @@ const CreateBatchBody = z
 
 const ListQuery = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(20),
+  status: z.enum(BATCH_STATUSES).optional(),
 })
 
 const FundingBody = z.object({
@@ -147,7 +159,7 @@ export function batchesRouter({
   router.get(
     "/batches",
     validated({ query: ListQuery }, async ({ query }, _req, res) => {
-      const batches = await store.list(query.limit)
+      const batches = await store.list(query.limit, query.status)
       res.json({ batches: batches.map(summary) })
     })
   )
@@ -156,12 +168,16 @@ export function batchesRouter({
     "/batches/:batchId",
     validated(
       { params: z.object({ batchId: BatchId }) },
-      async ({ params }, _req, res) => {
+      async ({ params }, req, res) => {
         const batch = await store.get(params.batchId)
         if (!batch) {
           throw new HttpError(404, "batch_not_found", "No batch with this id")
         }
-        res.json(summary(batch))
+        const detail: BatchDetail = summary(batch)
+        if (batch.status === "funded") {
+          detail.claims = await claimProgress(vault, params.batchId, req.log)
+        }
+        res.json(detail)
       }
     )
   )
@@ -283,4 +299,28 @@ function randomBatchId(): bigint {
 
 function summary({ depth: _, ...batch }: BatchRecord): BatchSummary {
   return batch
+}
+
+/**
+ * A funded batch's claim progress: the vault's running total of claims. It's public
+ * on-chain and never per recipient, so it shows nothing about who has claimed.
+ * Null when the vault isn't configured or can't be read.
+ */
+async function claimProgress(
+  vault: VaultReader | undefined,
+  batchId: bigint,
+  log: Logger
+): Promise<ClaimProgress | null> {
+  if (!vault) return null
+  try {
+    const onChain = await vault.getBatch(batchId)
+    if (!onChain) return null
+    return {
+      withdrawn: onChain.withdrawn,
+      remaining: onChain.total - onChain.withdrawn,
+    }
+  } catch (err) {
+    log.warn({ err }, "could not read the vault")
+    return null
+  }
 }

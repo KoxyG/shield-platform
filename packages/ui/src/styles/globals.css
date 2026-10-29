@@ -1,8 +1,6 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
-@import "@fontsource-variable/outfit";
-@import "@fontsource-variable/geist";
 @import "@fontsource-variable/inter";
 
 @custom-variant dark (&:is(.dark *));
@@ -10,73 +8,86 @@
 @source "../../../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
+/*
+ * Colors, radius, type and shadows adapted from the Coinbase Design System
+ * (github.com/coinbase/cds, Apache-2.0): packages/web/src/themes/coinbaseTheme.ts.
+ * Each color is a CDS spectrum value; the comment names the CDS semantic token
+ * it stands for.
+ */
 :root {
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.153 0.006 107.1);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.153 0.006 107.1);
-    --primary: oklch(0.852 0.199 91.936);
-    --primary-foreground: oklch(0.421 0.095 57.708);
-    --secondary: oklch(0.967 0.001 286.375);
-    --secondary-foreground: oklch(0.21 0.006 285.885);
-    --muted: oklch(0.966 0.005 106.5);
-    --muted-foreground: oklch(0.58 0.031 107.3);
-    --accent: oklch(0.966 0.005 106.5);
-    --accent-foreground: oklch(0.228 0.013 107.4);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.93 0.007 106.5);
-    --input: oklch(0.93 0.007 106.5);
-    --ring: oklch(0.737 0.021 106.9);
-    --chart-1: oklch(0.88 0.011 106.6);
-    --chart-2: oklch(0.58 0.031 107.3);
-    --chart-3: oklch(0.466 0.025 107.3);
-    --chart-4: oklch(0.394 0.023 107.4);
-    --chart-5: oklch(0.286 0.016 107.4);
-    --radius: 0.45rem;
-    --sidebar: oklch(0.988 0.003 106.5);
-    --sidebar-foreground: oklch(0.153 0.006 107.1);
-    --sidebar-primary: oklch(0.681 0.162 75.834);
-    --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
-    --sidebar-accent: oklch(0.966 0.005 106.5);
-    --sidebar-accent-foreground: oklch(0.228 0.013 107.4);
-    --sidebar-border: oklch(0.93 0.007 106.5);
-    --sidebar-ring: oklch(0.737 0.021 106.9);
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.153 0.006 107.1);
+    --background: rgb(255 255 255); /* bg: gray0 */
+    --foreground: rgb(10 11 13); /* fg: gray100 */
+    --card: rgb(255 255 255); /* bgElevation1: gray0 */
+    --card-foreground: rgb(10 11 13); /* fg */
+    --popover: rgb(255 255 255); /* bgElevation2: gray0 */
+    --popover-foreground: rgb(10 11 13); /* fg */
+    --primary: rgb(0 82 255); /* bgPrimary: blue60 */
+    --primary-foreground: rgb(255 255 255); /* fgInverse: gray0 */
+    --secondary: rgb(238 240 243); /* bgSecondary: gray10 */
+    --secondary-foreground: rgb(10 11 13); /* fg */
+    --muted: rgb(238 240 243); /* bgSecondary: gray10 */
+    --muted-foreground: rgb(91 97 110); /* fgMuted: gray60 */
+    --accent: rgb(245 248 255); /* bgPrimaryWash: blue0 */
+    --accent-foreground: rgb(0 82 255); /* fgPrimary: blue60 */
+    --destructive: rgb(207 32 47); /* fgNegative: red60 */
+    --positive: rgb(9 133 81); /* fgPositive: green60 */
+    --warning: rgb(207 71 14); /* fgWarning: orange60 */
+    --border: rgb(91 97 110 / 20%); /* bgLine: gray60 at 20% */
+    /* gray40: bgLineHeavy (gray60 at 66%) is 2.94:1 on white, under WCAG's 3:1 for
+       input borders */
+    --input: rgb(137 144 158);
+    --ring: rgb(0 82 255); /* bgLinePrimary: blue60 */
+    --chart-1: rgb(0 82 255); /* accentBoldBlue: blue60 */
+    --chart-2: rgb(9 133 81); /* accentBoldGreen: green60 */
+    --chart-3: rgb(90 48 173); /* accentBoldPurple: purple80 */
+    --chart-4: rgb(247 210 26); /* accentBoldYellow: yellow30 */
+    --chart-5: rgb(207 32 47); /* accentBoldRed: red60 */
+    --radius: 0.5rem; /* borderRadius 200 (8px), CDS's input radius */
+    --sidebar: rgb(247 248 249); /* bgSecondaryWash: gray5 */
+    --sidebar-foreground: rgb(10 11 13); /* fg */
+    --sidebar-primary: rgb(0 82 255); /* bgPrimary: blue60 */
+    --sidebar-primary-foreground: rgb(255 255 255); /* fgInverse */
+    --sidebar-accent: rgb(245 248 255); /* bgPrimaryWash: blue0 */
+    --sidebar-accent-foreground: rgb(0 82 255); /* fgPrimary: blue60 */
+    --sidebar-border: rgb(91 97 110 / 20%); /* bgLine */
+    --sidebar-ring: rgb(0 82 255); /* bgLinePrimary */
 }
 
 .dark {
-    --background: oklch(0.153 0.006 107.1);
-    --foreground: oklch(0.988 0.003 106.5);
-    --card: oklch(0.228 0.013 107.4);
-    --card-foreground: oklch(0.988 0.003 106.5);
-    --popover: oklch(0.228 0.013 107.4);
-    --popover-foreground: oklch(0.988 0.003 106.5);
-    --primary: oklch(0.795 0.184 86.047);
-    --primary-foreground: oklch(0.421 0.095 57.708);
-    --secondary: oklch(0.274 0.006 286.033);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.286 0.016 107.4);
-    --muted-foreground: oklch(0.737 0.021 106.9);
-    --accent: oklch(0.286 0.016 107.4);
-    --accent-foreground: oklch(0.988 0.003 106.5);
-    --destructive: oklch(0.704 0.191 22.216);
-    --border: oklch(1 0 0 / 10%);
-    --input: oklch(1 0 0 / 15%);
-    --ring: oklch(0.58 0.031 107.3);
-    --chart-1: oklch(0.88 0.011 106.6);
-    --chart-2: oklch(0.58 0.031 107.3);
-    --chart-3: oklch(0.466 0.025 107.3);
-    --chart-4: oklch(0.394 0.023 107.4);
-    --chart-5: oklch(0.286 0.016 107.4);
-    --sidebar: oklch(0.228 0.013 107.4);
-    --sidebar-foreground: oklch(0.988 0.003 106.5);
-    --sidebar-primary: oklch(0.795 0.184 86.047);
-    --sidebar-primary-foreground: oklch(0.987 0.026 102.212);
-    --sidebar-accent: oklch(0.286 0.016 107.4);
-    --sidebar-accent-foreground: oklch(0.988 0.003 106.5);
-    --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.58 0.031 107.3);
+    --background: rgb(10 11 13); /* bg: gray0 */
+    --foreground: rgb(255 255 255); /* fg: gray100 */
+    --card: rgb(20 21 25); /* bgElevation1: gray5 */
+    --card-foreground: rgb(255 255 255); /* fg */
+    --popover: rgb(30 32 37); /* bgElevation2: gray10 */
+    --popover-foreground: rgb(255 255 255); /* fg */
+    --primary: rgb(87 139 250); /* bgPrimary: blue70 */
+    --primary-foreground: rgb(10 11 13); /* fgInverse: gray0 */
+    --secondary: rgb(40 43 49); /* bgSecondary: gray15 */
+    --secondary-foreground: rgb(255 255 255); /* fg */
+    --muted: rgb(40 43 49); /* bgSecondary: gray15 */
+    /* gray70: fgMuted (gray60) is 4.48:1 on muted surfaces, just under WCAG AA */
+    --muted-foreground: rgb(165 170 182);
+    --accent: rgb(0 16 51); /* bgPrimaryWash: blue0 */
+    --accent-foreground: rgb(87 139 250); /* fgPrimary: blue70 */
+    --destructive: rgb(240 97 109); /* fgNegative: red60 */
+    --positive: rgb(39 173 117); /* fgPositive: green60 */
+    --warning: rgb(248 150 86); /* fgWarning: orange70 */
+    --border: rgb(138 145 158 / 20%); /* bgLine: gray60 at 20% */
+    --input: rgb(138 145 158 / 66%); /* bgLineHeavy: gray60 at 66% */
+    --ring: rgb(87 139 250); /* bgLinePrimary: blue70 */
+    --chart-1: rgb(55 115 245); /* accentBoldBlue: blue60 */
+    --chart-2: rgb(39 173 117); /* accentBoldGreen: green60 */
+    --chart-3: rgb(230 201 255); /* accentBoldPurple: purple80 */
+    --chart-4: rgb(147 96 0); /* accentBoldYellow: yellow30 */
+    --chart-5: rgb(240 97 109); /* accentBoldRed: red60 */
+    --sidebar: rgb(20 21 25); /* bgSecondaryWash: gray5 */
+    --sidebar-foreground: rgb(255 255 255); /* fg */
+    --sidebar-primary: rgb(87 139 250); /* bgPrimary: blue70 */
+    --sidebar-primary-foreground: rgb(10 11 13); /* fgInverse */
+    --sidebar-accent: rgb(0 16 51); /* bgPrimaryWash: blue0 */
+    --sidebar-accent-foreground: rgb(87 139 250); /* fgPrimary: blue70 */
+    --sidebar-border: rgb(138 145 158 / 20%); /* bgLine */
+    --sidebar-ring: rgb(87 139 250); /* bgLinePrimary */
 }
 
 @theme inline {
@@ -95,6 +106,8 @@
     --color-accent: var(--accent);
     --color-accent-foreground: var(--accent-foreground);
     --color-destructive: var(--destructive);
+    --color-positive: var(--positive);
+    --color-warning: var(--warning);
     --color-border: var(--border);
     --color-input: var(--input);
     --color-ring: var(--ring);
@@ -118,8 +131,39 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
-    --font-sans: 'Outfit', sans-serif;
+    /* CDS's default fonts: Inter, and Menlo/Consolas for numbers and code */
+    --font-sans: 'Inter Variable', sans-serif;
     --font-heading: 'Inter Variable', sans-serif;
+    --font-mono: Menlo, Consolas, monospace;
+}
+
+/* CDS's type scale (text-display-1 ... text-caption) and elevation shadows */
+@theme {
+    --text-display-1: 4rem;
+    --text-display-1--line-height: 4.5rem;
+    --text-display-2: 3rem;
+    --text-display-2--line-height: 3.5rem;
+    --text-display-3: 2.5rem;
+    --text-display-3--line-height: 3rem;
+    --text-title-1: 1.75rem;
+    --text-title-1--line-height: 2.25rem;
+    --text-title-3: 1.25rem;
+    --text-title-3--line-height: 1.75rem;
+    --text-headline: 1rem;
+    --text-headline--line-height: 1.5rem;
+    --text-label: 0.875rem;
+    --text-label--line-height: 1.25rem;
+    --text-caption: 0.8125rem;
+    --text-caption--line-height: 1rem;
+    --shadow-elevation-1: 0px 8px 12px rgb(91 97 110 / 12%);
+    --shadow-elevation-2: 0px 8px 24px rgb(0 0 0 / 12%);
+}
+
+/* From ui.shadcn.com: a larger tap area on touch screens (used by the theme toggle) */
+@utility extend-touch-target {
+  @media (pointer: coarse) {
+    @apply relative touch-manipulation after:absolute after:-inset-2;
+  }
 }
 
 @layer base {
@@ -127,9 +171,16 @@
     @apply border-border outline-ring/50;
     }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background font-sans text-foreground antialiased;
     }
   button:not(:disabled), [role="button"]:not(:disabled) {
     cursor: pointer;
     }
+  /* Pages with in-page links (data-smooth-scroll) scroll to them smoothly; other
+     pages keep instant scrolling, and so does anyone who prefers reduced motion */
+  @media (prefers-reduced-motion: no-preference) {
+    html:has([data-smooth-scroll]) {
+      scroll-behavior: smooth;
+    }
+  }
 }

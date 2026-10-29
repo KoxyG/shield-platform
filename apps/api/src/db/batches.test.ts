@@ -108,6 +108,15 @@ describe.skipIf(!uri)("MongoBatchStore", () => {
     expect(await store.list(1)).toHaveLength(1)
   })
 
+  test("lists only the batches in a given status", async () => {
+    await store.create(batch(300n), allocations(300n))
+    await store.setStatus(300n, "created", "proving")
+
+    const proving = await store.list(50, "proving")
+    expect(proving.map((b) => b.batchId)).toContain(300n)
+    expect(proving.every((b) => b.status === "proving")).toBe(true)
+  })
+
   test("moves a batch to a new status only from the expected one", async () => {
     const id = 200n
     await store.create(batch(id), allocations(id))
