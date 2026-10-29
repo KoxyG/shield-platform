@@ -2,6 +2,7 @@ import { createServer } from "node:http"
 
 import { createApp } from "./app"
 import { loadConfig } from "./config/env"
+import { MongoBatchStore } from "./db/batches"
 import { connectMongo } from "./db/mongo"
 import { createLogger } from "./lib/logger"
 
@@ -24,6 +25,12 @@ const mongo = await connectMongo(config.MONGODB_URI).catch((err: unknown) => {
   process.exit(1)
 })
 
+const batches = new MongoBatchStore(mongo.db)
+await batches.ensureIndexes().catch((err: unknown) => {
+  logger.fatal({ err }, "could not create MongoDB indexes")
+  process.exit(1)
+})
+
 const app = createApp({
   config,
   logger,
@@ -32,6 +39,7 @@ const app = createApp({
       await mongo.db.command({ ping: 1 })
     },
   },
+  batches,
 })
 
 const server = createServer(app)

@@ -25,6 +25,15 @@ const EnvSchema = z.object({
         .filter(Boolean)
     )
     .pipe(z.array(z.url())),
+  // Encrypts stored claim data, which holds each recipient's secret. 32 random bytes,
+  // base64: `openssl rand -base64 32`. Stored claim data can't be read without it.
+  CLAIM_DATA_KEY: z
+    .string()
+    .regex(
+      /^[A-Za-z0-9+/]{43}=$/,
+      "must be 32 bytes in base64 (openssl rand -base64 32)"
+    )
+    .transform((value) => Buffer.from(value, "base64")),
 })
 
 export type Config = z.output<typeof EnvSchema>

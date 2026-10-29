@@ -4,8 +4,9 @@ Express 5 API, run on Bun.
 
 ```bash
 cp .env.example .env   # Bun loads .env automatically
+echo "CLAIM_DATA_KEY=$(openssl rand -base64 32)" >> .env
 bun run dev            # watch mode on :4000 (needs MongoDB: `docker compose up -d` at the root)
-bun test
+bun test               # add MONGODB_TEST_URI=mongodb://localhost:27017/shieldzk_test to also test the MongoDB store
 ```
 
 ## Layout
@@ -16,7 +17,9 @@ bun test
 | `src/app.ts` | `createApp()`: middleware, routers, error handling. Does no I/O, so tests use it directly |
 | `src/config/env.ts` | Environment schema; invalid config fails the boot |
 | `src/routes/` | Routers. Feature routers mount under `/v1` |
+| `src/db/batches.ts` | Batch storage (`confidential_batches`, `confidential_allocations`) and claim-data encryption |
 | `src/lib/validated.ts` | Typed request parsing for handlers |
+| `src/lib/encryption.ts` | AES-256-GCM, bound to a context so ciphertext can't move between records |
 | `src/middleware/error-handler.ts` | One JSON error shape for every failure |
 
 ## Conventions
@@ -28,6 +31,8 @@ bun test
 - Errors look like `{ "error": { "code": "...", "message": "...", "details": ... } }`.
 - Bigints (amounts, field elements) go out as decimal strings.
 - Never log request bodies or claim data: they hold allocation amounts and secrets.
+- Claim data is stored encrypted under `CLAIM_DATA_KEY`. Read it with `openClaim()`
+  (`src/db/batches.ts`); never return it from an operator endpoint.
 
 ## Endpoints
 
@@ -35,3 +40,6 @@ bun test
 |---|---|
 | `GET /health` | Liveness |
 | `GET /ready` | Readiness: pings MongoDB, 503 if a dependency is down |
+| `POST /v1/batches` | Creates a confidential batch from `{ name?, allocations: [{ recipient, amount }] }` (1 to 1024; amounts are decimal strings of base units; each recipient once). Generates a secret per recipient and builds the commitments and Merkle tree. Returns the batch's summary; claim data is stored encrypted, never returned |
+| `GET /v1/batches` | Batch summaries, newest first (`?limit=`, 1 to 100, default 20) |
+| `GET /v1/batches/:batchId` | One batch's summary: `batchId`, `name`, `status`, `root`, `total`, `recipientCount`, `createdAt` |

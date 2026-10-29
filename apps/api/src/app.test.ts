@@ -5,6 +5,7 @@ import request from "supertest"
 import { z } from "zod"
 
 import { createApp } from "./app"
+import { MemoryBatchStore } from "./db/memory-batches"
 import { jsonReplacer } from "./lib/json"
 import { validated } from "./lib/validated"
 import { errorHandler } from "./middleware/error-handler"
@@ -12,9 +13,13 @@ import type { ReadinessCheck } from "./routes/health"
 
 function makeApp(readinessChecks: Record<string, ReadinessCheck> = {}) {
   return createApp({
-    config: { CORS_ORIGINS: ["http://localhost:5173"] },
+    config: {
+      CORS_ORIGINS: ["http://localhost:5173"],
+      CLAIM_DATA_KEY: Buffer.alloc(32),
+    },
     logger: pino({ level: "silent" }),
     readinessChecks,
+    batches: new MemoryBatchStore(),
   })
 }
 

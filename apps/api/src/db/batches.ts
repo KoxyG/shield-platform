@@ -1,0 +1,205 @@
+import type { ClaimData } from "@workspace/sdk"
+import {
+  MongoBulkWriteError,
+  MongoServerError,
+  type Collection,
+  type Db,
+} from "mongodb"
+
+import { decrypt, encrypt, type Encrypted } from "../lib/encryption"
+import { jsonReplacer } from "../lib/json"
+
+/** Where a batch is in its life. Proving, funding and claims add states. */
+export type BatchStatus = "created"
+
+/** A confidential batch. Only values that end up public; allocations are separate. */
+export type BatchRecord = {
+  batchId: bigint
+  name: string | null
+  status: BatchStatus
+  /** Merkle root of the allocation commitments: `root` in fund_batch. */
+  root: bigint
+  /** Sum of the allocations: `total` in fund_batch. */
+  total: bigint
+  /** Tree depth the batch was built with. */
+  depth: number
+  recipientCount: number
+  createdAt: Date
+}
+
+/** One recipient's allocation. The claim data is encrypted: it holds their secret. */
+export type AllocationRecord = {
+  batchId: bigint
+  leafIndex: number
+  /** The disburser's reference for the recipient, e.g. an SDP receiver id. */
+  recipient: string
+  claim: Encrypted
+}
+
+/** A recipient's claim data, decrypted (architecture flow, step 4). */
+export type ClaimRecord = ClaimData & { batchId: bigint }
+
+export class BatchIdTakenError extends Error {
+  override readonly name = "BatchIdTakenError"
+
+  constructor(batchId: bigint) {
+    super(`Batch id ${batchId} is already in use`)
+  }
+}
+
+export interface BatchStore {
+  /** Saves a new batch with its allocations. Throws BatchIdTakenError if the id is in use. */
+  create(batch: BatchRecord, allocations: AllocationRecord[]): Promise<void>
+  get(batchId: bigint): Promise<BatchRecord | undefined>
+  /** The most recently created batches, newest first. */
+  list(limit: number): Promise<BatchRecord[]>
+  /** A batch's allocations, in leaf order. */
+  allocations(batchId: bigint): Promise<AllocationRecord[]>
+}
+
+/**
+ * Encrypts a recipient's claim data for storage. The batch id and leaf index are
+ * bound to the ciphertext, so claim data moved to another allocation won't decrypt.
+ */
+export function sealClaim(
+  key: Uint8Array,
+  batchId: bigint,
+  claim: ClaimData
+): Encrypted {
+  const plaintext = JSON.stringify({ batchId, ...claim }, jsonReplacer)
+  return encrypt(key, plaintext, claimContext(batchId, claim.leafIndex))
+}
+
+/** Decrypts an allocation's claim data: what its recipient needs to claim. */
+export function openClaim(
+  key: Uint8Array,
+  allocation: AllocationRecord
+): ClaimRecord {
+  const { batchId, leafIndex } = allocation
+  const claim = JSON.parse(
+    decrypt(key, allocation.claim, claimContext(batchId, leafIndex))
+  )
+  return {
+    batchId: BigInt(claim.batchId),
+    leafIndex: claim.leafIndex,
+    amount: BigInt(claim.amount),
+    secret: BigInt(claim.secret),
+    pathElements: claim.pathElements.map(BigInt),
+    pathIndices: claim.pathIndices,
+  }
+}
+
+function claimContext(batchId: bigint, leafIndex: number): string {
+  return `confidential_allocations/${batchId}/${leafIndex}`
+}
+
+// u64 ids and field elements don't fit MongoDB's numbers, so they're stored as
+// decimal strings.
+type BatchDoc = Omit<BatchRecord, "batchId" | "root" | "total"> & {
+  _id: string
+  root: string
+  total: string
+}
+type AllocationDoc = Omit<AllocationRecord, "batchId"> & { batchId: string }
+
+/** BatchStore on the `confidential_batches` and `confidential_allocations` collections. */
+export class MongoBatchStore implements BatchStore {
+  private readonly batches: Collection<BatchDoc>
+  private readonly allocationDocs: Collection<AllocationDoc>
+
+  constructor(db: Db) {
+    this.batches = db.collection<BatchDoc>("confidential_batches")
+    this.allocationDocs = db.collection<AllocationDoc>(
+      "confidential_allocations"
+    )
+  }
+
+  /** Creates the indexes the store relies on. Safe to run on every boot. */
+  async ensureIndexes(): Promise<void> {
+    await this.batches.createIndex({ createdAt: -1 })
+    // Also makes a batch id usable by one batch only: see create()
+    await this.allocationDocs.createIndex(
+      { batchId: 1, leafIndex: 1 },
+      { unique: true }
+    )
+    await this.allocationDocs.createIndex({ recipient: 1 })
+  }
+
+  async create(
+    batch: BatchRecord,
+    allocations: AllocationRecord[]
+  ): Promise<void> {
+    // Without a transaction (the dev MongoDB isn't a replica set), the batch goes in
+    // last: allocations only count once their batch exists, so a crash halfway
+    // leaves unused leftovers rather than a batch with missing allocations.
+    const id = batch.batchId.toString()
+    if (await this.batches.countDocuments({ _id: id }, { limit: 1 })) {
+      throw new BatchIdTakenError(batch.batchId)
+    }
+    try {
+      await this.allocationDocs.insertMany(
+        allocations.map((a) => ({ ...a, batchId: id }))
+      )
+    } catch (err) {
+      // If not even the first allocation went in, the unique index says another
+      // batch holds this id; nothing of ours needs removing.
+      if (insertedCount(err) === 0) {
+        throw isDuplicateKey(err) ? new BatchIdTakenError(batch.batchId) : err
+      }
+      // Our first allocation went in, so the id is ours: remove what we wrote
+      await this.allocationDocs.deleteMany({ batchId: id })
+      throw err
+    }
+    try {
+      const { batchId: _, root, total, ...rest } = batch
+      await this.batches.insertOne({
+        _id: id,
+        ...rest,
+        root: root.toString(),
+        total: total.toString(),
+      })
+    } catch (err) {
+      await this.allocationDocs.deleteMany({ batchId: id })
+      throw err
+    }
+  }
+
+  async get(batchId: bigint): Promise<BatchRecord | undefined> {
+    const doc = await this.batches.findOne({ _id: batchId.toString() })
+    return doc ? fromBatchDoc(doc) : undefined
+  }
+
+  async list(limit: number): Promise<BatchRecord[]> {
+    const docs = await this.batches
+      .find()
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray()
+    return docs.map(fromBatchDoc)
+  }
+
+  async allocations(batchId: bigint): Promise<AllocationRecord[]> {
+    const docs = await this.allocationDocs
+      .find({ batchId: batchId.toString() }, { projection: { _id: 0 } })
+      .sort({ leafIndex: 1 })
+      .toArray()
+    return docs.map((doc) => ({ ...doc, batchId: BigInt(doc.batchId) }))
+  }
+}
+
+function fromBatchDoc({ _id, root, total, ...rest }: BatchDoc): BatchRecord {
+  return {
+    ...rest,
+    batchId: BigInt(_id),
+    root: BigInt(root),
+    total: BigInt(total),
+  }
+}
+
+function insertedCount(err: unknown): number {
+  return err instanceof MongoBulkWriteError ? err.insertedCount : 0
+}
+
+function isDuplicateKey(err: unknown): boolean {
+  return err instanceof MongoServerError && err.code === 11000
+}
