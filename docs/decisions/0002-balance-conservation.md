@@ -61,12 +61,16 @@ wrap-around, or committed for a different batch.
 
 The vault is deployed with two verifier contracts, one per circuit: `verifier` for
 withdraw and `conservation_verifier` for conservation. Each holds exactly one
-verifying key, so the `verify(proof, public_inputs)` interface doesn't change.
+verifying key, so the `verify(proof, public_inputs)` interface doesn't change. The
+proof is 256 bytes, `A ‖ B ‖ C` in Soroban's BN254 encoding (each G2 coordinate as
+`c1 ‖ c0`); `circuits/lib/soroban.js` converts snarkjs output to it.
 
-**Claims must open the same commitment.** The withdraw circuit has to compute its leaf
-with the shared `AllocationCommitment` template (`circuits/commitment.circom`) and
-take `batch_id` as a public input that the vault supplies. Today `claim.circom` uses
-`Poseidon(secret, amount)`, so it can't claim from a batch registered this way.
+**Claims must open the same commitment.** The withdraw circuit computes its leaf with
+the shared `AllocationCommitment` template (`circuits/commitment.circom`), as
+`claim.circom` now does. `batch_id` can stay a private input there, as the spec has it:
+the vault looks up the batch's root by `batch_id`, and the conservation proof makes
+every leaf under that root commit to that same `batch_id`. So a claim can only open an
+allocation of the batch it's paid from.
 
 ## Rationale
 
@@ -79,7 +83,8 @@ take `batch_id` as a public input that the vault supplies. Today `claim.circom` 
   caller, so matching circomlib on-chain would be extra work and extra risk.
 - One proof per batch, verified once, at a cost that doesn't depend on batch size.
 - The proof doesn't reveal how many recipients a batch has: it always covers all
-  1024 slots.
+  1024 slots. Recipients can still roughly tell from their own Merkle path, because
+  slots are filled in order and empty subtrees hash to known values.
 
 ## Consequences
 
@@ -90,15 +95,22 @@ take `batch_id` as a public input that the vault supplies. Today `claim.circom` 
   `powersOfTau28_hez_final_20.ptau`.
 - **The batch id comes first.** Every commitment includes `batch_id`, so the id has to
   be fixed before the tree is built. The disburser picks it and the vault rejects
-  reuse. Someone could register an id first to block it, but only by funding a valid
-  batch of their own, and the disburser can pick another id before sending claim data.
+  reuse. Anyone who sees the disburser's `fund_batch` can take the id first, and
+  cheaply: the proof binds `[root, total, batch_id]` but not the funder or the token,
+  so they can replay it with a token they minted themselves. The id then holds the
+  disburser's root but pays out worthless tokens, and the disburser has to rebuild the
+  batch under a new id. No deposited funds are at risk, but the API must confirm a
+  batch by its funder and token, not by its id alone, before sending claim data.
+  ADR 0003 closes this by scoping ids per funder.
 - **Assumes D1 option (b).** Each leaf is one allocation of any 64-bit amount, paid out
   publicly at withdrawal. Fixed denominations (option a) would change the amount
   constraint, so D1 should be settled together with this.
 - **Secrets carry the privacy.** A recipient's Merkle path contains a neighbour's
   commitment, so a guessable secret would let them brute-force the neighbour's amount.
-  Secrets must come from a CSPRNG (at least 128 bits), one per recipient
-  (`generateSecret()` in `circuits/lib/conservation.js`). Relevant to D2.
+  Secrets must come from a CSPRNG (at least 128 bits), one per allocation
+  (`generateSecret()` in `circuits/lib/conservation.js`), and never repeat: a recipient
+  who shares a secret with their neighbour could claim the neighbour's allocation too.
+  `buildConservationInput` refuses repeated secrets. Relevant to D2.
 - **Unclaimed funds stay in the vault.** There's no refund or expiry path. Open question.
 
 ## Alternatives considered
@@ -117,11 +129,11 @@ take `batch_id` as a public input that the vault supplies. Today `claim.circom` 
 | Item | Change |
 |---|---|
 | Hash | The vault doesn't compute Poseidon under this design, so the Soroban host-function check only matters if a later design hashes on-chain |
-| Commitment | Drop "(proposed)". `batch_id` is the vault's `u64`; secrets are fresh CSPRNG values of at least 128 bits, one per recipient |
-| Withdraw public inputs | Keep `batch_id`; the withdraw circuit computes its leaf with `AllocationCommitment` |
+| Commitment | Drop "`claim.circom` still has to adopt it" (it has). `batch_id` is the vault's `u64`; secrets are fresh CSPRNG values of at least 128 bits, never repeated |
+| Withdraw public inputs | No change; `batch_id` stays a private input of the withdraw circuit (see Decision) |
 | Conservation public inputs | `[root, total, batch_id]` (replaces "TBD") |
 | Circuits → conservation circuit | Point to this ADR instead of "design open" |
 | Contracts → vault | Add `fund_batch(funder, batch_id, token, root, total, proof)`; deployed with two verifiers |
-| Contracts → verifier | One verifier instance per circuit |
-| Test vectors | Add `commitment.json` and `batch.json` (roots, totals, empty-tree roots) |
+| Contracts → verifier | One verifier instance per circuit; proofs are 256 bytes, `A ‖ B ‖ C` in Soroban's BN254 encoding |
+| Test vectors | List `commitment.json`, `batch.json` (roots, totals, empty-tree roots, claim paths and nullifiers), `nullifier.json`, and `conservation-proof.json` (a real proof and verifying key in the contracts' encoding) |
 | D5 | Resolved by ADR 0002 |
