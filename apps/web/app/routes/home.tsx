@@ -21,6 +21,12 @@ export default function Home() {
           </div>
           <div className="flex items-center gap-4">
             <Link
+              to="/batches"
+              className="text-xs text-neutral-400 hover:text-white transition-colors"
+            >
+              Batches
+            </Link>
+            <Link
               to="/claim"
               className="text-xs text-neutral-400 hover:text-white transition-colors"
             >
