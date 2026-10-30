@@ -4,15 +4,32 @@ import helmet from "helmet"
 import type { Logger } from "pino"
 import { pinoHttp } from "pino-http"
 
-import type { Config } from "./config/env"
+import { vaultConnection, type Config } from "./config/env"
+import type { BatchStore } from "./db/batches"
 import { jsonReplacer } from "./lib/json"
 import { errorHandler, notFound } from "./middleware/error-handler"
+import type { ConservationProofs } from "./proving/proofs"
+import { batchesRouter, type VaultReader } from "./routes/batches"
+import { configRouter } from "./routes/config"
 import { healthRouter, type ReadinessCheck } from "./routes/health"
+import { claimRouter } from "./routes/claim"
 
 export type AppDeps = {
-  config: Pick<Config, "CORS_ORIGINS">
+  config: Pick<
+    Config,
+    | "CORS_ORIGINS"
+    | "CLAIM_DATA_KEY"
+    | "STELLAR_RPC_URL"
+    | "STELLAR_NETWORK_PASSPHRASE"
+    | "VAULT_CONTRACT_ID"
+  >
   logger: Logger
   readinessChecks: Record<string, ReadinessCheck>
+  batches: BatchStore
+  /** Undefined when proving isn't configured. */
+  proofs?: ConservationProofs
+  /** Undefined when the vault isn't configured. */
+  vault?: VaultReader
 }
 
 // Accept a caller's request id only if it is short and log-safe.
@@ -24,6 +41,9 @@ export function createApp({
   config,
   logger,
   readinessChecks,
+  batches,
+  proofs,
+  vault,
 }: AppDeps): Express {
   const app = express()
   app.set("json replacer", jsonReplacer)
@@ -63,7 +83,20 @@ export function createApp({
   app.use(express.json({ limit: "1mb" }))
 
   app.use(healthRouter(readinessChecks))
-  // Feature routers mount under /v1.
+  // Feature routers mount under /v1. The batch routes need CLAIM_DATA_KEY.
+  if (config.CLAIM_DATA_KEY) {
+    app.use(
+      "/v1",
+      batchesRouter({
+        store: batches,
+        claimDataKey: config.CLAIM_DATA_KEY,
+        proofs,
+        vault,
+      })
+    )
+  }
+  app.use("/v1", configRouter(vaultConnection(config)))
+  app.use(claimRouter())
 
   app.use(notFound)
   app.use(errorHandler)

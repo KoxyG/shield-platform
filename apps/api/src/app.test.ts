@@ -5,6 +5,7 @@ import request from "supertest"
 import { z } from "zod"
 
 import { createApp } from "./app"
+import { MemoryBatchStore } from "./db/memory-batches"
 import { jsonReplacer } from "./lib/json"
 import { validated } from "./lib/validated"
 import { errorHandler } from "./middleware/error-handler"
@@ -12,9 +13,13 @@ import type { ReadinessCheck } from "./routes/health"
 
 function makeApp(readinessChecks: Record<string, ReadinessCheck> = {}) {
   return createApp({
-    config: { CORS_ORIGINS: ["http://localhost:5173"] },
+    config: {
+      CORS_ORIGINS: ["http://localhost:5173"],
+      CLAIM_DATA_KEY: Buffer.alloc(32),
+    },
     logger: pino({ level: "silent" }),
     readinessChecks,
+    batches: new MemoryBatchStore(),
   })
 }
 
@@ -66,6 +71,17 @@ describe("errors", () => {
     const res = await request(makeApp()).get("/nope")
     expect(res.status).toBe(404)
     expect(res.body.error.code).toBe("not_found")
+  })
+
+  test("the batch routes are off without a claim data key", async () => {
+    const app = createApp({
+      config: { CORS_ORIGINS: [] },
+      logger: pino({ level: "silent" }),
+      readinessChecks: {},
+      batches: new MemoryBatchStore(),
+    })
+    const res = await request(app).get("/v1/batches")
+    expect(res.status).toBe(404)
   })
 
   test("malformed JSON returns 400", async () => {

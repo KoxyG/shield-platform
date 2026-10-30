@@ -8,7 +8,9 @@
 # The Stellar CLI generates bindings for @stellar/stellar-sdk v14, which used Node's
 # Buffer for bytes. v17 (pinned in package.json) takes Uint8Array and needs no Buffer
 # polyfill in the browser, so the output is rewritten to match. The CLI's re-exports
-# of the whole SDK are dropped too; import from @stellar/stellar-sdk directly.
+# of the whole SDK are dropped too; import from @stellar/stellar-sdk directly. Types
+# it imports as values (ClientOptions, MethodOptions, Result) are marked `type`:
+# they don't exist at runtime, so a browser bundler (Vite) fails on them.
 set -euo pipefail
 
 wasm="$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
@@ -31,6 +33,7 @@ stellar contract bindings typescript --wasm "$wasm" --output-dir "$tmp/shield-va
     s/^if \(typeof window !== "undefined"\) \{.*?^\}\n//ms;
     s/^export \* (as \w+ )?from "\@stellar\/stellar-sdk[^"]*";\n//mg;
     s/\bBuffer\b/Uint8Array/g;
+    s/^(\s+)(ClientOptions as ContractClientOptions|MethodOptions|Result),$/$1type $2,/mg;
   ' "$tmp/shield-vault/src/index.ts"
 } > "$out"
 

@@ -7,7 +7,6 @@ import {
   isRouteErrorResponse,
 } from "react-router"
 
-import type { Route } from "./+types/root"
 import "@workspace/ui/globals.css"
 
 export function Layout({ children }: { children: React.ReactNode }) {
@@ -28,11 +27,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
+import { WalletProvider } from "./context/wallet-context"
+
 export default function App() {
-  return <Outlet />
+  return (
+    <WalletProvider>
+      <Outlet />
+    </WalletProvider>
+  )
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+export function ErrorBoundary({ error }: { error?: any }) {
   let message = "Oops!"
   let details = "An unexpected error occurred."
   let stack: string | undefined
