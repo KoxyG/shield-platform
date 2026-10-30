@@ -1,2 +1,5 @@
 export * from "./field"
 export * from "./protocol"
+export * from "./recipient"
+export * from "./proof"
+export * from "./constants"

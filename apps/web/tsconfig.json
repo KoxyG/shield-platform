@@ -15,7 +15,9 @@
     "rootDirs": [".", "./.react-router/types"],
     "paths": {
       "@/*": ["./app/*"],
-      "@workspace/ui/*": ["../../packages/ui/src/*"]
+      "@workspace/ui/*": ["../../packages/ui/src/*"],
+      "@workspace/sdk": ["../../packages/sdk/src/index.ts"],
+      "@workspace/sdk/*": ["../../packages/sdk/src/*"]
     },
     "esModuleInterop": true,
     "verbatimModuleSyntax": true,

@@ -11,7 +11,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@stellar/stellar-sdk": "17.2.1"
+    "@stellar/stellar-sdk": "17.2.1",
+    "snarkjs": "^0.7.6"
   },
   "devDependencies": {
     "@types/bun": "^1.4.4",
