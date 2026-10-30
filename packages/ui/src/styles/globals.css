@@ -53,41 +53,46 @@
     --sidebar-ring: rgb(0 82 255); /* bgLinePrimary */
 }
 
+/*
+ * Dark mode is black and white: pure black and white, and neutral grays (equal
+ * R, G and B) for every surface, instead of CDS's blue-tinted dark grays. Blue is
+ * kept for primary actions only: CDS's light blue60, which carries white text at
+ * 5.75:1 (CDS's dark blue70 only reaches 3.3:1 with white).
+ */
 .dark {
-    --background: rgb(10 11 13); /* bg: gray0 */
-    --foreground: rgb(255 255 255); /* fg: gray100 */
-    --card: rgb(20 21 25); /* bgElevation1: gray5 */
-    --card-foreground: rgb(255 255 255); /* fg */
-    --popover: rgb(30 32 37); /* bgElevation2: gray10 */
-    --popover-foreground: rgb(255 255 255); /* fg */
-    --primary: rgb(87 139 250); /* bgPrimary: blue70 */
-    --primary-foreground: rgb(10 11 13); /* fgInverse: gray0 */
-    --secondary: rgb(40 43 49); /* bgSecondary: gray15 */
-    --secondary-foreground: rgb(255 255 255); /* fg */
-    --muted: rgb(40 43 49); /* bgSecondary: gray15 */
-    /* gray70: fgMuted (gray60) is 4.48:1 on muted surfaces, just under WCAG AA */
-    --muted-foreground: rgb(165 170 182);
-    --accent: rgb(0 16 51); /* bgPrimaryWash: blue0 */
-    --accent-foreground: rgb(87 139 250); /* fgPrimary: blue70 */
+    --background: rgb(0 0 0);
+    --foreground: rgb(255 255 255);
+    --card: rgb(10 10 10);
+    --card-foreground: rgb(255 255 255);
+    --popover: rgb(23 23 23);
+    --popover-foreground: rgb(255 255 255);
+    --primary: rgb(0 82 255); /* blue60 */
+    --primary-foreground: rgb(255 255 255);
+    --secondary: rgb(38 38 38);
+    --secondary-foreground: rgb(255 255 255);
+    --muted: rgb(38 38 38);
+    --muted-foreground: rgb(163 163 163);
+    --accent: rgb(38 38 38);
+    --accent-foreground: rgb(255 255 255);
     --destructive: rgb(240 97 109); /* fgNegative: red60 */
     --positive: rgb(39 173 117); /* fgPositive: green60 */
     --warning: rgb(248 150 86); /* fgWarning: orange70 */
-    --border: rgb(138 145 158 / 20%); /* bgLine: gray60 at 20% */
-    --input: rgb(138 145 158 / 66%); /* bgLineHeavy: gray60 at 66% */
-    --ring: rgb(87 139 250); /* bgLinePrimary: blue70 */
+    --border: rgb(255 255 255 / 15%);
+    --input: rgb(115 115 115);
+    --ring: rgb(163 163 163);
     --chart-1: rgb(55 115 245); /* accentBoldBlue: blue60 */
     --chart-2: rgb(39 173 117); /* accentBoldGreen: green60 */
     --chart-3: rgb(230 201 255); /* accentBoldPurple: purple80 */
     --chart-4: rgb(147 96 0); /* accentBoldYellow: yellow30 */
     --chart-5: rgb(240 97 109); /* accentBoldRed: red60 */
-    --sidebar: rgb(20 21 25); /* bgSecondaryWash: gray5 */
-    --sidebar-foreground: rgb(255 255 255); /* fg */
-    --sidebar-primary: rgb(87 139 250); /* bgPrimary: blue70 */
-    --sidebar-primary-foreground: rgb(10 11 13); /* fgInverse */
-    --sidebar-accent: rgb(0 16 51); /* bgPrimaryWash: blue0 */
-    --sidebar-accent-foreground: rgb(87 139 250); /* fgPrimary: blue70 */
-    --sidebar-border: rgb(138 145 158 / 20%); /* bgLine */
-    --sidebar-ring: rgb(87 139 250); /* bgLinePrimary */
+    --sidebar: rgb(10 10 10);
+    --sidebar-foreground: rgb(255 255 255);
+    --sidebar-primary: rgb(0 82 255); /* blue60 */
+    --sidebar-primary-foreground: rgb(255 255 255);
+    --sidebar-accent: rgb(38 38 38);
+    --sidebar-accent-foreground: rgb(255 255 255);
+    --sidebar-border: rgb(255 255 255 / 15%);
+    --sidebar-ring: rgb(163 163 163);
 }
 
 @theme inline {
