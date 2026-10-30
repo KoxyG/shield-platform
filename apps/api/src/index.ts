@@ -1,9 +1,19 @@
+import { existsSync } from "node:fs"
 import { createServer } from "node:http"
 
+import { ShieldVaultClient } from "@workspace/sdk/chain"
+
 import { createApp } from "./app"
-import { loadConfig } from "./config/env"
+import { loadConfig, vaultConnection } from "./config/env"
+import { MongoBatchStore } from "./db/batches"
 import { connectMongo } from "./db/mongo"
 import { createLogger } from "./lib/logger"
+import {
+  CONSERVATION_CIRCUIT,
+  conservationArtifacts,
+  nodeConservationProver,
+} from "./proving/conservation"
+import { ConservationProofs } from "./proving/proofs"
 
 const SHUTDOWN_TIMEOUT_MS = 10_000
 
@@ -24,6 +34,46 @@ const mongo = await connectMongo(config.MONGODB_URI).catch((err: unknown) => {
   process.exit(1)
 })
 
+const batches = new MongoBatchStore(mongo.db)
+await batches.ensureIndexes().catch((err: unknown) => {
+  logger.fatal({ err }, "could not create MongoDB indexes")
+  process.exit(1)
+})
+
+const claimDataKey = config.CLAIM_DATA_KEY
+if (!claimDataKey) {
+  logger.warn("the batch routes are off: CLAIM_DATA_KEY isn't set")
+}
+
+let proofs: ConservationProofs | undefined
+const circuitsDir = config.CONSERVATION_CIRCUITS_DIR
+if (circuitsDir && claimDataKey) {
+  const artifacts = conservationArtifacts(circuitsDir, CONSERVATION_CIRCUIT)
+  const missing = Object.values(artifacts).filter((file) => !existsSync(file))
+  if (missing.length > 0) {
+    logger.fatal({ missing }, "conservation prover files not found")
+    process.exit(1)
+  }
+  proofs = new ConservationProofs({
+    store: batches,
+    prover: nodeConservationProver(circuitsDir),
+    claimDataKey,
+    logger,
+  })
+  // Proofs a restart interrupted start over
+  for (const batch of await batches.withStatus("proving")) {
+    proofs.start(batch.batchId)
+  }
+} else if (claimDataKey) {
+  logger.warn("proving is off: CONSERVATION_CIRCUITS_DIR isn't set")
+}
+
+const connection = vaultConnection(config)
+const vault = connection ? new ShieldVaultClient(connection) : undefined
+if (!vault) {
+  logger.warn("funding can't be confirmed: the vault isn't configured")
+}
+
 const app = createApp({
   config,
   logger,
@@ -32,6 +82,9 @@ const app = createApp({
       await mongo.db.command({ ping: 1 })
     },
   },
+  batches,
+  proofs,
+  vault,
 })
 
 const server = createServer(app)
