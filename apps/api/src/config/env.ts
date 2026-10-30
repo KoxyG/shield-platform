@@ -29,13 +29,15 @@ const EnvSchema = z.object({
     .pipe(z.array(z.url())),
   // Encrypts stored claim data, which holds each recipient's secret. 32 random bytes,
   // base64: `openssl rand -base64 32`. Stored claim data can't be read without it.
+  // Unset, the batch routes (/v1/batches) are off.
   CLAIM_DATA_KEY: z
     .string()
     .regex(
       /^[A-Za-z0-9+/]{43}=$/,
       "must be 32 bytes in base64 (openssl rand -base64 32)"
     )
-    .transform((value) => Buffer.from(value, "base64")),
+    .transform((value) => Buffer.from(value, "base64"))
+    .optional(),
   // shield-contracts' circuits directory. Batches are proved with its
   // lib/conservation.js and the conservation_main keys that
   // scripts/groth16-setup.sh wrote to build/. Unset, proving is off.

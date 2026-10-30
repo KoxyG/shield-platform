@@ -73,6 +73,17 @@ describe("errors", () => {
     expect(res.body.error.code).toBe("not_found")
   })
 
+  test("the batch routes are off without a claim data key", async () => {
+    const app = createApp({
+      config: { CORS_ORIGINS: [] },
+      logger: pino({ level: "silent" }),
+      readinessChecks: {},
+      batches: new MemoryBatchStore(),
+    })
+    const res = await request(app).get("/v1/batches")
+    expect(res.status).toBe(404)
+  })
+
   test("malformed JSON returns 400", async () => {
     const res = await request(makeApp())
       .post("/health")

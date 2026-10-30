@@ -40,9 +40,14 @@ await batches.ensureIndexes().catch((err: unknown) => {
   process.exit(1)
 })
 
+const claimDataKey = config.CLAIM_DATA_KEY
+if (!claimDataKey) {
+  logger.warn("the batch routes are off: CLAIM_DATA_KEY isn't set")
+}
+
 let proofs: ConservationProofs | undefined
 const circuitsDir = config.CONSERVATION_CIRCUITS_DIR
-if (circuitsDir) {
+if (circuitsDir && claimDataKey) {
   const artifacts = conservationArtifacts(circuitsDir, CONSERVATION_CIRCUIT)
   const missing = Object.values(artifacts).filter((file) => !existsSync(file))
   if (missing.length > 0) {
@@ -52,14 +57,14 @@ if (circuitsDir) {
   proofs = new ConservationProofs({
     store: batches,
     prover: nodeConservationProver(circuitsDir),
-    claimDataKey: config.CLAIM_DATA_KEY,
+    claimDataKey,
     logger,
   })
   // Proofs a restart interrupted start over
   for (const batch of await batches.withStatus("proving")) {
     proofs.start(batch.batchId)
   }
-} else {
+} else if (claimDataKey) {
   logger.warn("proving is off: CONSERVATION_CIRCUITS_DIR isn't set")
 }
 

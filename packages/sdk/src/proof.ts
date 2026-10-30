@@ -1,3 +1,9 @@
+/// <reference path="./types/snarkjs.d.ts" />
+import * as snarkjs from "snarkjs"
+
+import { fieldToBytes32 } from "./chain/encoding"
+import { addressToField } from "./recipient"
+
 /*
  * Groth16 proofs from snarkjs, in the byte format ShieldVerifier reads:
  * A || B || C, 256 bytes. A G1 point is be(x) || be(y); a G2 point is
@@ -67,6 +73,19 @@ function coordinate(value: string | undefined): Uint8Array {
   return bytes
 }
 
+/** A G1 point as 64 bytes. */
+export function g1ToBytes(point: string[]): Uint8Array {
+  return g1(point)
+}
+
+/** A G2 point as 128 bytes, each coordinate's halves swapped to c1 || c0. */
+export function g2ToBytes(point: string[][]): Uint8Array {
+  return g2(point)
+}
+
+/** The same as proofToBytes. */
+export const formatGroth16ProofForSoroban = proofToBytes
+
 function concat(parts: Uint8Array[]): Uint8Array {
   const out = new Uint8Array(parts.reduce((n, part) => n + part.length, 0))
   let offset = 0
@@ -75,4 +94,100 @@ function concat(parts: Uint8Array[]): Uint8Array {
     offset += part.length
   }
   return out
+}
+
+export interface ClaimProofInput {
+  root: bigint | string
+  nullifierHash: bigint | string
+  recipientAddress: string
+  amount: bigint | string
+  secret: bigint | string
+  batchId: bigint | string
+  pathElements: (bigint | string)[]
+  pathIndices: number[]
+}
+
+export interface ClaimProofOutput {
+  /** 256-byte Soroban-compatible Groth16 proof (A || B || C). */
+  proofBytes: Uint8Array
+  /** Hex-encoded proof string with 0x prefix. */
+  proofHex: string
+  /** 4 public inputs as 32-byte big-endian buffers: [root, nullifier, recipient, amount]. */
+  publicInputs: Uint8Array[]
+  /** Decimal public signals returned by snarkjs. */
+  publicSignals: string[]
+  /** Address as field element. */
+  recipientField: bigint
+}
+
+/**
+ * Generates a confidential claim proof for `claim.circom` and formats it
+ * ready to submit to `ShieldVault.withdraw(...)`.
+ */
+export async function generateClaimProof(
+  claimData: ClaimProofInput,
+  wasmPathOrBuffer: string | Uint8Array | ArrayBuffer,
+  zkeyPathOrBuffer: string | Uint8Array | ArrayBuffer
+): Promise<ClaimProofOutput> {
+  const recipientField = await addressToField(claimData.recipientAddress)
+
+  const circuitInputs = {
+    root: BigInt(claimData.root).toString(),
+    nullifierHash: BigInt(claimData.nullifierHash).toString(),
+    recipient: recipientField.toString(),
+    amount: BigInt(claimData.amount).toString(),
+    secret: BigInt(claimData.secret).toString(),
+    batchId: BigInt(claimData.batchId).toString(),
+    pathElements: claimData.pathElements.map((el) => BigInt(el).toString()),
+    pathIndices: claimData.pathIndices,
+  }
+
+  let wasm: any = wasmPathOrBuffer
+  let zkey: any = zkeyPathOrBuffer
+
+  // If running in browser or given a URL, fetch into Uint8Array to enable memory-mode proving in snarkjs
+  if (typeof wasm === "string" && "window" in globalThis) {
+    const res = await fetch(wasm)
+    if (!res.ok) throw new Error(`Failed to fetch WASM from ${wasm}: HTTP ${res.status}`)
+    wasm = new Uint8Array(await res.arrayBuffer())
+  } else if (wasm instanceof ArrayBuffer) {
+    wasm = new Uint8Array(wasm)
+  }
+
+  if (typeof zkey === "string" && "window" in globalThis) {
+    const res = await fetch(zkey)
+    if (!res.ok) throw new Error(`Failed to fetch ZKey from ${zkey}: HTTP ${res.status}`)
+    zkey = new Uint8Array(await res.arrayBuffer())
+  } else if (zkey instanceof ArrayBuffer) {
+    zkey = new Uint8Array(zkey)
+  }
+
+  const { proof, publicSignals } = await (snarkjs as any).groth16.fullProve(
+    circuitInputs,
+    wasm,
+    zkey
+  )
+
+  const proofBytes = proofToBytes(proof)
+  let proofHex = "0x"
+  for (let i = 0; i < proofBytes.length; i++) {
+    const b = proofBytes[i] ?? 0
+    proofHex += b.toString(16).padStart(2, "0")
+  }
+
+  // Public inputs in circuit order: [root, nullifier, recipient, amount]
+  const publicInputs = [
+    fieldToBytes32(BigInt(publicSignals[0])),
+    fieldToBytes32(BigInt(publicSignals[1])),
+    fieldToBytes32(BigInt(publicSignals[2])),
+    fieldToBytes32(BigInt(publicSignals[3])),
+  ]
+
+  return {
+    proofBytes,
+    proofHex,
+    publicInputs,
+    publicSignals,
+    recipientField,
+  }
 }

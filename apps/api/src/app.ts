@@ -12,6 +12,7 @@ import type { ConservationProofs } from "./proving/proofs"
 import { batchesRouter, type VaultReader } from "./routes/batches"
 import { configRouter } from "./routes/config"
 import { healthRouter, type ReadinessCheck } from "./routes/health"
+import { claimRouter } from "./routes/claim"
 
 export type AppDeps = {
   config: Pick<
@@ -82,17 +83,20 @@ export function createApp({
   app.use(express.json({ limit: "1mb" }))
 
   app.use(healthRouter(readinessChecks))
-  // Feature routers mount under /v1.
-  app.use(
-    "/v1",
-    batchesRouter({
-      store: batches,
-      claimDataKey: config.CLAIM_DATA_KEY,
-      proofs,
-      vault,
-    })
-  )
+  // Feature routers mount under /v1. The batch routes need CLAIM_DATA_KEY.
+  if (config.CLAIM_DATA_KEY) {
+    app.use(
+      "/v1",
+      batchesRouter({
+        store: batches,
+        claimDataKey: config.CLAIM_DATA_KEY,
+        proofs,
+        vault,
+      })
+    )
+  }
   app.use("/v1", configRouter(vaultConnection(config)))
+  app.use(claimRouter())
 
   app.use(notFound)
   app.use(errorHandler)

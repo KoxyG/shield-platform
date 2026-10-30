@@ -7,27 +7,19 @@ import {
   isRouteErrorResponse,
 } from "react-router"
 
-import { SiteFooter } from "@/components/site-footer"
-import { SiteHeader } from "@/components/site-header"
-import { ThemeProvider } from "@/components/theme-provider"
-
-import type { Route } from "./+types/root"
 import "@workspace/ui/globals.css"
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
-    // next-themes sets the theme's class on <html> before React hydrates
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en">
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
-        {/* Filled in from the theme by the theme toggle (useMetaColor) */}
-        <meta name="theme-color" />
         <Meta />
         <Links />
       </head>
       <body>
-        <ThemeProvider>{children}</ThemeProvider>
+        {children}
         <ScrollRestoration />
         <Scripts />
       </body>
@@ -35,17 +27,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
+import { WalletProvider } from "./context/wallet-context"
+
 export default function App() {
   return (
-    <>
-      <SiteHeader />
+    <WalletProvider>
       <Outlet />
-      <SiteFooter />
-    </>
+    </WalletProvider>
   )
 }
 
-export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
+export function ErrorBoundary({ error }: { error?: any }) {
   let message = "Oops!"
   let details = "An unexpected error occurred."
   let stack: string | undefined

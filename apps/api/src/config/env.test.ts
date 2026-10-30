@@ -44,9 +44,13 @@ describe("loadConfig", () => {
     ).toThrow(/MONGODB_URI/)
   })
 
-  test("rejects a missing claim data key, or one that isn't 32 bytes of base64", () => {
+  test("leaves the claim data key unset when it's missing", () => {
+    expect(loadConfig({ MONGODB_URI }).CLAIM_DATA_KEY).toBeUndefined()
+  })
+
+  test("rejects a claim data key that isn't 32 bytes of base64", () => {
     const short = Buffer.alloc(16, 7).toString("base64")
-    for (const key of [undefined, short, "x".repeat(43) + "!", ""]) {
+    for (const key of [short, "x".repeat(43) + "!", ""]) {
       expect(() => loadConfig({ MONGODB_URI, CLAIM_DATA_KEY: key })).toThrow(
         /CLAIM_DATA_KEY/
       )
