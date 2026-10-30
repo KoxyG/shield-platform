@@ -8,7 +8,8 @@
     "build": "react-router build",
     "start": "react-router-serve ./build/server/index.js",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "react-router typegen && tsc"
+    "typecheck": "react-router typegen && tsc",
+    "test": "bun test"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",
@@ -26,6 +27,7 @@
   "devDependencies": {
     "@react-router/dev": "8.4.0",
     "@tailwindcss/vite": "^4",
+    "@types/bun": "^1.4.4",
     "@types/node": "^22",
     "@types/react": "^19",
     "@types/react-dom": "^19",
