@@ -111,10 +111,30 @@ export async function generateClaimProof(
     pathIndices: claimData.pathIndices,
   }
 
+  let wasm: any = wasmPathOrBuffer
+  let zkey: any = zkeyPathOrBuffer
+
+  // If running in browser or given a URL, fetch into Uint8Array to enable memory-mode proving in snarkjs
+  if (typeof wasm === "string" && typeof window !== "undefined") {
+    const res = await fetch(wasm)
+    if (!res.ok) throw new Error(`Failed to fetch WASM from ${wasm}: HTTP ${res.status}`)
+    wasm = new Uint8Array(await res.arrayBuffer())
+  } else if (wasm instanceof ArrayBuffer) {
+    wasm = new Uint8Array(wasm)
+  }
+
+  if (typeof zkey === "string" && typeof window !== "undefined") {
+    const res = await fetch(zkey)
+    if (!res.ok) throw new Error(`Failed to fetch ZKey from ${zkey}: HTTP ${res.status}`)
+    zkey = new Uint8Array(await res.arrayBuffer())
+  } else if (zkey instanceof ArrayBuffer) {
+    zkey = new Uint8Array(zkey)
+  }
+
   const { proof, publicSignals } = await (snarkjs as any).groth16.fullProve(
     circuitInputs,
-    wasmPathOrBuffer,
-    zkeyPathOrBuffer
+    wasm,
+    zkey
   )
 
   const proofBytes = formatGroth16ProofForSoroban(proof)

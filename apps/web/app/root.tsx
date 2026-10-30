@@ -27,8 +27,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
   )
 }
 
+import { WalletProvider } from "./context/wallet-context"
+
 export default function App() {
-  return <Outlet />
+  return (
+    <WalletProvider>
+      <Outlet />
+    </WalletProvider>
+  )
 }
 
 export function ErrorBoundary({ error }: { error?: any }) {
