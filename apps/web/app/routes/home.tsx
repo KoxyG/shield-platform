@@ -3,6 +3,8 @@ import { ShieldCheck, ArrowRight, LockKey, Cpu, Wallet, CheckCircle } from "@pho
 import { Button } from "@workspace/ui/components/button"
 import { TESTNET_CONFIG } from "@workspace/sdk"
 
+import { WalletConnectButton } from "../components/wallet-button"
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-neutral-950 text-neutral-100 flex flex-col justify-between selection:bg-emerald-500/30 selection:text-emerald-300">
@@ -17,8 +19,14 @@ export default function Home() {
               ShieldZK
             </span>
           </div>
-          <div className="flex items-center gap-4 text-xs font-mono text-neutral-400">
-            <span>Stellar Testnet</span>
+          <div className="flex items-center gap-4">
+            <Link
+              to="/claim"
+              className="text-xs text-neutral-400 hover:text-white transition-colors"
+            >
+              Claim Portal
+            </Link>
+            <WalletConnectButton />
           </div>
         </div>
       </header>
