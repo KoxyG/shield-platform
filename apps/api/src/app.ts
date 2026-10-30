@@ -8,6 +8,7 @@ import type { Config } from "./config/env"
 import { jsonReplacer } from "./lib/json"
 import { errorHandler, notFound } from "./middleware/error-handler"
 import { healthRouter, type ReadinessCheck } from "./routes/health"
+import { claimRouter } from "./routes/claim"
 
 export type AppDeps = {
   config: Pick<Config, "CORS_ORIGINS">
@@ -63,7 +64,7 @@ export function createApp({
   app.use(express.json({ limit: "1mb" }))
 
   app.use(healthRouter(readinessChecks))
-  // Feature routers mount under /v1.
+  app.use(claimRouter())
 
   app.use(notFound)
   app.use(errorHandler)

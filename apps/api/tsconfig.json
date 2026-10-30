@@ -12,7 +12,11 @@
     "noUncheckedIndexedAccess": true,
     "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
-    "skipLibCheck": true
+    "skipLibCheck": true,
+    "paths": {
+      "@workspace/sdk": ["../../packages/sdk/src/index.ts"],
+      "@workspace/sdk/*": ["../../packages/sdk/src/*"]
+    }
   },
   "include": ["src"]
 }

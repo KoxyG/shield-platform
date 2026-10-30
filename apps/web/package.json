@@ -15,10 +15,12 @@
     "@react-router/node": "8.4.0",
     "@react-router/serve": "8.4.0",
     "@workspace/ui": "workspace:*",
+    "@workspace/sdk": "workspace:*",
     "isbot": "^5",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router": "8.4.0"
+    "react-router": "8.4.0",
+    "snarkjs": "^0.7.6"
   },
   "devDependencies": {
     "@react-router/dev": "8.4.0",
